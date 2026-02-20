@@ -1051,22 +1051,27 @@ function showToast(msg, type='info'){
 }
 
 async function onDateChange(){
-  // CRITICAL: save current data before switching to another date
-  const prevDate=document.getElementById('dayDate')._prevDate;
-  if(prevDate && currentItems.length>0){
+  // CRITICAL: save current data IMMEDIATELY before switching date
+  const dateEl=document.getElementById('dayDate');
+  const prevDate=dateEl._prevDate;
+  const newDate=dateEl.value;
+
+  if(prevDate && prevDate!==newDate && currentItems.length>0){
+    // cancel pending timer and save immediately
+    clearTimeout(_saveDraftTimer);
+    localStorage.setItem('draft_today',JSON.stringify({date:prevDate,dayType,items:currentItems}));
     await _persistDay(prevDate);
   }
-  const date=document.getElementById('dayDate').value;
-  document.getElementById('dayDate')._prevDate=date;
+  dateEl._prevDate=newDate;
   loadWeightForDate();
   updateNotTodayBanner();
   // load from Supabase
   try{
-    const rows=await sbGet('days',`select=*&date=eq.${date}&limit=1`);
+    const rows=await sbGet('days',`select=*&date=eq.${newDate}&limit=1`);
     if(rows&&rows.length){
       const r=rows[0]; dayType=r.day_type||'rest'; currentItems=r.items||[];
       refreshItemMacros();
-      if(r.weight){ document.getElementById('weightInput').value=r.weight; _saveWeightLocal(date,r.weight); }
+      if(r.weight){ document.getElementById('weightInput').value=r.weight; _saveWeightLocal(newDate,r.weight); }
       setDayType(dayType); renderFoodList(); updateMacrosBar();
       document.getElementById('claudeBtn').disabled=currentItems.filter(x=>x.type==='food').length===0;
       setSyncStatus('ok');
@@ -1081,7 +1086,7 @@ async function onDateChange(){
     // offline — try localStorage history
     try{
       const h=JSON.parse(localStorage.getItem('history')||'[]');
-      const entry=h.find(x=>x.date===date);
+      const entry=h.find(x=>x.date===newDate);
       if(entry){ dayType=entry.dayType||'rest'; currentItems=entry.items||[];
         refreshItemMacros(); setDayType(dayType); renderFoodList(); updateMacrosBar();
       } else { currentItems=[]; renderFoodList(); updateMacrosBar(); }

@@ -853,16 +853,34 @@ async function sbGet(table,q=''){
   return r.json();
 }
 async function sbUpsert(table,data){
-  console.log(`[UPSERT] ${table}`,JSON.stringify(data).slice(0,200));
-  const r=await fetch(`${SUPA_URL}/rest/v1/${table}`,{method:'POST',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},
-    body:JSON.stringify(data)});
-  if(!r.ok){
-    const err=await r.text();
-    console.error(`[UPSERT ERROR] ${err}`);
+  console.log(`[UPSERT] ${table} date=${data.date}`);
+  // Try PATCH first (update existing), then POST (insert new)
+  const patchUrl=`${SUPA_URL}/rest/v1/${table}?date=eq.${data.date}`;
+  const patchR=await fetch(patchUrl,{
+    method:'PATCH',
+    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+    body:JSON.stringify(data)
+  });
+  if(patchR.ok){
+    // Check if any row was updated
+    const count=patchR.headers.get('content-range');
+    if(count && count!=='*/0' && count!=='-/-'){
+      console.log(`[PATCH OK] ${table} date=${data.date}`);
+      return;
+    }
+  }
+  // No existing row — INSERT
+  const postR=await fetch(`${SUPA_URL}/rest/v1/${table}`,{
+    method:'POST',
+    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+    body:JSON.stringify(data)
+  });
+  if(!postR.ok){
+    const err=await postR.text();
+    console.error(`[UPSERT ERROR]`,err);
     throw new Error(err);
   }
-  console.log(`[UPSERT OK] ${table} date=${data.date}`);
+  console.log(`[INSERT OK] ${table} date=${data.date}`);
 }
 async function sbDelete(table,q){
   console.log(`[DELETE] ${table}?${q}`);

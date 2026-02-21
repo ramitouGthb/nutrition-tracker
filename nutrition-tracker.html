@@ -853,14 +853,23 @@ async function sbGet(table,q=''){
   return r.json();
 }
 async function sbUpsert(table,data){
+  console.log(`[UPSERT] ${table}`,JSON.stringify(data).slice(0,200));
   const r=await fetch(`${SUPA_URL}/rest/v1/${table}`,{method:'POST',
     headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},
     body:JSON.stringify(data)});
-  if(!r.ok) throw new Error(await r.text());
+  if(!r.ok){
+    const err=await r.text();
+    console.error(`[UPSERT ERROR] ${err}`);
+    throw new Error(err);
+  }
+  console.log(`[UPSERT OK] ${table} date=${data.date}`);
 }
 async function sbDelete(table,q){
-  const r=await fetch(`${SUPA_URL}/rest/v1/${table}?${q}`,{method:'DELETE',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY}});
-  if(!r.ok) throw new Error(await r.text());
+  console.log(`[DELETE] ${table}?${q}`);
+  const r=await fetch(`${SUPA_URL}/rest/v1/${table}?${q}`,{method:'DELETE',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Prefer':'return=representation'}});
+  const txt=await r.text();
+  if(!r.ok){console.error(`[DELETE ERROR] ${txt}`); throw new Error(txt);}
+  console.log(`[DELETE OK] response:`,txt);
 }
 function setSyncStatus(s){
   const el=document.getElementById('syncStatus'); if(!el) return;
@@ -924,22 +933,31 @@ function getFoodById(id){ return FOODS.find(f=>f.id===id); }
 let _saveDraftTimer=null;
 function saveDraft(){
   const date=document.getElementById('dayDate').value;
-  localStorage.setItem('draft_today',JSON.stringify({date,dayType,items:currentItems}));
+  // snapshot current state — prevent timer from using stale globals
+  const itemsSnap=JSON.parse(JSON.stringify(currentItems));
+  const typeSnap=dayType;
+  localStorage.setItem('draft_today',JSON.stringify({date,dayType:typeSnap,items:itemsSnap}));
   setSyncStatus('saving');
   clearTimeout(_saveDraftTimer);
-  _saveDraftTimer=setTimeout(()=>_persistDay(date),1200);
+  _saveDraftTimer=setTimeout(()=>_persistDay(date,itemsSnap,typeSnap),1200);
 }
-async function _persistDay(date){
+async function _persistDay(date,items,dt){
   if(!date) return;
-  const t=totals();
+  // use passed snapshot, fallback to globals only if called directly
+  const _items = items!==undefined ? items : currentItems;
+  const _dt = dt!==undefined ? dt : dayType;
+  const _t = _items.reduce((a,i)=>{
+    const m=calcMacros(i);
+    a.cal+=m.cal;a.prot+=m.prot;a.carb+=m.carb;a.fat+=m.fat;return a;
+  },{cal:0,prot:0,carb:0,fat:0});
   const w=parseFloat(document.getElementById('weightInput').value)||null;
   try{
-    await sbUpsert('days',{date,day_type:dayType,items:currentItems,totals:t,weight:w,updated_at:new Date().toISOString()});
+    await sbUpsert('days',{date,day_type:_dt,items:_items,totals:_t,weight:w,updated_at:new Date().toISOString()});
     setSyncStatus('ok');
-    _saveToLocalHistory(date,dayType,currentItems,t);
+    _saveToLocalHistory(date,_dt,_items,_t);
   }catch(e){ setSyncStatus('error'); console.warn('day save',e); }
 }
-async function saveToHistory(){ await _persistDay(document.getElementById('dayDate').value); }
+async function saveToHistory(){ await _persistDay(document.getElementById('dayDate').value,JSON.parse(JSON.stringify(currentItems)),dayType); }
 function _saveToLocalHistory(date,dt,items,t){
   const h=JSON.parse(localStorage.getItem('history')||'[]');
   const ex=h.findIndex(x=>x.date===date);
@@ -1057,10 +1075,15 @@ async function onDateChange(){
   const newDate=dateEl.value;
 
   if(prevDate && prevDate!==newDate && currentItems.length>0){
-    // cancel pending timer and save immediately
+    // cancel pending timer and save immediately with snapshot
     clearTimeout(_saveDraftTimer);
-    localStorage.setItem('draft_today',JSON.stringify({date:prevDate,dayType,items:currentItems}));
-    await _persistDay(prevDate);
+    const itemsSnap=JSON.parse(JSON.stringify(currentItems));
+    const typeSnap=dayType;
+    console.log(`[DATE CHANGE] saving ${prevDate} → ${newDate}, items:${itemsSnap.length}`);
+    localStorage.setItem('draft_today',JSON.stringify({date:prevDate,dayType:typeSnap,items:itemsSnap}));
+    await _persistDay(prevDate,itemsSnap,typeSnap);
+  } else {
+    console.log(`[DATE CHANGE] ${prevDate} → ${newDate}, items:${currentItems.length} — no save needed`);
   }
   dateEl._prevDate=newDate;
   loadWeightForDate();

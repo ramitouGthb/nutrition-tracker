@@ -100,10 +100,11 @@ body{font-family:'Heebo',sans-serif;background:var(--bg);color:var(--text);direc
 .food-name{font-size:13px;font-weight:500;cursor:pointer;}
 .food-name:hover{color:var(--accent);}
 .amount-cell{display:flex;align-items:center;gap:3px;}
-.food-amount-input{width:58px;padding:5px 5px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'Heebo',sans-serif;font-size:13px;text-align:center;outline:none;transition:border-color .2s;}
+.food-amount-input{width:52px;padding:5px 5px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'Heebo',sans-serif;font-size:13px;text-align:center;outline:none;transition:border-color .2s;}
 .food-amount-input:focus{border-color:var(--accent);}
-.amount-spinners{display:flex;flex-direction:column;gap:2px;}
-.spin-btn{background:var(--surface3);border:none;color:var(--text2);cursor:pointer;width:17px;height:13px;border-radius:3px;font-size:8px;display:flex;align-items:center;justify-content:center;transition:all .15s;padding:0;}
+.food-amount-ctrl{display:flex;align-items:center;gap:4px;}
+.spin-col{display:flex;flex-direction:column;gap:2px;}
+.spin-btn{background:var(--surface3);border:none;color:var(--text2);cursor:pointer;width:18px;height:12px;border-radius:3px;font-size:7px;display:flex;align-items:center;justify-content:center;transition:all .15s;padding:0;line-height:1;}
 .spin-btn:hover{background:var(--accent);color:white;}
 .food-unit{font-size:11px;color:var(--text2);white-space:nowrap;}
 .food-macro{font-size:13px;font-weight:500;text-align:center;}
@@ -1052,32 +1053,75 @@ async function renderHistory(){
   document.getElementById('historyList').innerHTML='<div class="empty-state">⏳ טוען...</div>';
   const h=await getHistory(), weights=_getWeightsLocal();
   const list=document.getElementById('historyList');
-  if(!h.length){list.innerHTML='<div class="empty-state">אין היסטוריה עדיין</div>';return;}
-  list.innerHTML=h.map(x=>{
-    const w=weights[x.date];
-    const wBadge=w?`<span class="history-weight-badge">⚖ ${w} ק״ג</span>`:'';;
-    const d=new Date(x.date+'T00:00:00');
-    const dateStr=d.toLocaleDateString('he-IL',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-    return `<div class="history-item">
-      <div class="history-header">
-        <span class="history-date" onclick="loadDay('${x.date}')" title="טען יום">${dateStr}</span>
-        <div style="display:flex;gap:8px;align-items:center;">${wBadge}
-          <div class="history-type ${x.dayType}">${x.dayType==='rest'?'מנוחה':'אימון'}</div>
+
+  const START_DATE='2026-02-01';
+
+  function buildHTML(showAll){
+    // h is already sorted newest first and contains only days with data
+    let days = [...h].sort((a,b)=>b.date.localeCompare(a.date));
+
+    if(showAll){
+      // Generate all dates from START_DATE to today
+      const allDates=[];
+      const end=new Date(); end.setHours(0,0,0,0);
+      let cur=new Date(START_DATE+'T00:00:00');
+      while(cur<=end){
+        allDates.push(cur.toISOString().split('T')[0]);
+        cur.setDate(cur.getDate()+1);
+      }
+      // Merge: for dates with data use data, otherwise empty
+      const dataMap=Object.fromEntries(days.map(d=>[d.date,d]));
+      days=allDates.reverse().map(date=>dataMap[date]||{date,dayType:'rest',items:[],totals:{cal:0,prot:0,carb:0,fat:0},empty:true});
+    }
+
+    if(!days.length){return '<div class="empty-state">אין היסטוריה עדיין</div>';}
+
+    const items=days.map(x=>{
+      const w=weights[x.date];
+      const wBadge=w?`<span class="history-weight-badge">⚖ ${w} ק״ג</span>`:'';
+      const d=new Date(x.date+'T00:00:00');
+      const dateStr=d.toLocaleDateString('he-IL',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+      if(x.empty){
+        return `<div class="history-item" style="opacity:0.4;">
+          <div class="history-header">
+            <span class="history-date" onclick="loadDay('${x.date}')" title="טען יום">${dateStr}</span>
+            <div style="font-size:11px;color:var(--text2);">אין נתונים</div>
+          </div>
+        </div>`;
+      }
+      return `<div class="history-item">
+        <div class="history-header">
+          <span class="history-date" onclick="loadDay('${x.date}')" title="טען יום">${dateStr}</span>
+          <div style="display:flex;gap:8px;align-items:center;">${wBadge}
+            <div class="history-type ${x.dayType}">${x.dayType==='rest'?'מנוחה':'אימון'}</div>
+          </div>
         </div>
-      </div>
-      <div class="history-macros">
-        <div class="history-macro">קל׳ <span>${Math.round(x.totals.cal)}</span></div>
-        <div class="history-macro">חלבון <span>${Math.round(x.totals.prot)}ג׳</span></div>
-        <div class="history-macro">פחמימות <span>${Math.round(x.totals.carb)}ג׳</span></div>
-        <div class="history-macro">שומנים <span>${Math.round(x.totals.fat)}ג׳</span></div>
-      </div>
-      <div class="history-actions">
-        <button class="hist-btn load" onclick="loadDay('${x.date}')">📂 טען יום</button>
-        <button class="hist-btn clone" onclick="openClonePopup('${x.date}')">📋 שכפל ליום אחר</button>
-        <button class="hist-btn del" onclick="deleteHistoryDay('${x.date}')">🗑</button>
-      </div>
+        <div class="history-macros">
+          <div class="history-macro">קל׳ <span>${Math.round(x.totals?.cal||0)}</span></div>
+          <div class="history-macro">חלבון <span>${Math.round(x.totals?.prot||0)}ג׳</span></div>
+          <div class="history-macro">פחמימות <span>${Math.round(x.totals?.carb||0)}ג׳</span></div>
+          <div class="history-macro">שומנים <span>${Math.round(x.totals?.fat||0)}ג׳</span></div>
+        </div>
+        <div class="history-actions">
+          <button class="hist-btn load" onclick="loadDay('${x.date}')">📂 טען יום</button>
+          <button class="hist-btn clone" onclick="openClonePopup('${x.date}')">📋 שכפל ליום אחר</button>
+          <button class="hist-btn del" onclick="deleteHistoryDay('${x.date}')">🗑</button>
+        </div>
+      </div>`;
+    }).join('');
+
+    const toggleBtn=`<div style="text-align:center;margin-bottom:12px;">
+      <button onclick="renderHistoryFull(${showAll?'false':'true'})"
+        style="padding:8px 20px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text2);font-family:'Heebo',sans-serif;font-size:13px;cursor:pointer;">
+        ${showAll?'📋 הצג רק ימים עם נתונים':'📅 הצג את כל התאריכים מ-01/02/2026'}
+      </button>
     </div>`;
-  }).join('');
+
+    return toggleBtn+items;
+  }
+
+  list.innerHTML=buildHTML(false);
+  window.renderHistoryFull=function(showAll){ list.innerHTML=buildHTML(showAll); };
 }
 async function loadDay(date){
   try{
@@ -1613,11 +1657,13 @@ function renderFoodList(){
       <span class="drag-handle">⠿</span>
       <span class="food-name" title="${nameDisplay}">${nameDisplay}</span>
       <div class="food-amount-ctrl">
-        <button class="spin-btn" onclick="spinAmount(${idx},-1)">−</button>
         <input class="food-amount-input" type="number" min="0" step="1"
           value="${item.amount}" onchange="updateItemAmount(${idx},+this.value)">
         <span class="food-unit-label">${unitLabel}</span>
-        <button class="spin-btn" onclick="spinAmount(${idx},+1)">+</button>
+        <div class="spin-col">
+          <button class="spin-btn spin-up" onclick="spinAmount(${idx},+1)" title="+5">▲</button>
+          <button class="spin-btn spin-dn" onclick="spinAmount(${idx},-1)" title="-5">▼</button>
+        </div>
       </div>
       <span class="food-cal">${macros.cal}</span>
       <span class="food-prot">${macros.prot}</span>

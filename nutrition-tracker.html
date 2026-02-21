@@ -1057,8 +1057,9 @@ async function renderHistory(){
   const START_DATE='2026-02-01';
 
   function buildHTML(showAll){
-    // h is already sorted newest first and contains only days with data
-    let days = [...h].sort((a,b)=>b.date.localeCompare(a.date));
+    // only days with at least one food item (not just section headers)
+    const hasFood = x => x.items && x.items.some(i=>!i.section);
+    let days = [...h].filter(hasFood).sort((a,b)=>b.date.localeCompare(a.date));
 
     if(showAll){
       // Generate all dates from START_DATE to today

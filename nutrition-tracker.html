@@ -1682,11 +1682,40 @@ function copySummary(){
     }).join('\n');
 
   const t=totals();
+
+  // טבלה תזונתית
+  const pad=(s,n)=>String(s).padEnd(n,' ');
+  const padL=(s,n)=>String(s).padStart(n,' ');
+  const sep='─'.repeat(62);
+  const header=pad('פריט',20)+pad('כמות',11)+padL('קלוריות',10)+padL('חלבון',8)+padL('פחמימות',10)+padL('שומן',7);
+
+  const tableLines=currentItems
+    .filter(x=>!x.section)
+    .map(x=>{
+      if(x.free) return pad(x.name||'פריט חופשי',20)+pad('-',11)+padL('-',10)+padL('-',8)+padL('-',10)+padL('-',7);
+      const food=getFoodForItem(x);
+      if(!food) return null;
+      const macros=calcMacros(food,x.amount);
+      const name=(x.name||food.name).substring(0,19);
+      const unitLabel=food.unit||'גרם';
+      const qty=x.amount+' '+unitLabel;
+      return pad(name,20)+pad(qty,11)+padL(Math.round(macros.cal),10)+padL(macros.prot.toFixed(1),8)+padL(macros.carb.toFixed(1),10)+padL(macros.fat.toFixed(1),7);
+    }).filter(Boolean).join('\n');
+
+  const totalLine=pad('סה"כ',20)+pad('',11)+padL(Math.round(t.cal),10)+padL(t.prot.toFixed(1),8)+padL(t.carb.toFixed(1),10)+padL(t.fat.toFixed(1),7);
+
   const text=
 `📅 ${dateStr} — ${dayLabel}
 
 🍽 מה אכלתי:
-${foodLines}`;
+${foodLines}
+
+📊 ערכים תזונתיים:
+${header}
+${sep}
+${tableLines}
+${sep}
+${totalLine}`;
 
   navigator.clipboard.writeText(text).then(()=>{
     const btn=document.getElementById('copyBtn');

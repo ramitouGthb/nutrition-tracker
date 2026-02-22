@@ -724,6 +724,7 @@ const DEFAULT_FOODS = [
   {id:12, name:"טונה במים (116 קל' / 100 גרם)",           per100:{cal:116, prot:26.0,carb:0.0,  fat:0.8},  defaultAmount:100, unit:'גרם'},
   {id:13, name:"דבש (320 קל' / 100 גרם)",                 per100:{cal:320, prot:0.0, carb:80.0, fat:0.0},  defaultAmount:10,  unit:'גרם'},
   {id:14, name:'6 מלפפונים קטנים + 2 שומר קטנים',        perUnit:{cal:65,  prot:2.8, carb:9.2,  fat:0.8},  defaultAmount:1,   unit:'מנה'},
+  {id:18, name:'אגוזי מלך',                               per100:{cal:654, prot:15.2,carb:13.7, fat:65.2}, defaultAmount:15,  unit:'גרם'},
   {id:15, name:"ויטמין D3 (2,000 IU / 50 מק\"ג)",         perUnit:{cal:0,   prot:0,   carb:0,    fat:0},    defaultAmount:1,   unit:'כמוסה'},
   {id:16, name:"אומגה 3 שמן דגים (1,000 מ\"ג)",           perUnit:{cal:9,   prot:0,   carb:0,    fat:1.0},  defaultAmount:1,   unit:'כמוסה'},
   {id:17, name:'מגנזיום (100 מ"ג)',                        perUnit:{cal:0,   prot:0,   carb:0,    fat:0},    defaultAmount:1,   unit:'כמוסה'},
@@ -1652,12 +1653,11 @@ function copySummary(){
     .filter(x=>!x.section)
     .map(x=>{
       if(x.free){
-        return `• ${x.name||'פריט חופשי'}: ${x.cal||0} קל׳, ${x.prot||0}ג' חלבון, ${x.carb||0}ג' פחמימות, ${x.fat||0}ג' שומן`;
+        return `• ${x.name||'פריט חופשי'}`;
       }
       const food=getFoodForItem(x);
-      const m=calcMacros(x);
       const unitLabel=food?food.unit||'גרם':'גרם';
-      return `• ${x.name}: ${x.amount} ${unitLabel} → ${m.cal} קל׳, ${m.prot}ג' חלבון, ${m.carb}ג' פחמימות, ${m.fat}ג' שומן`;
+      return `• ${x.name}: ${x.amount} ${unitLabel}`;
     }).join('\n');
 
   const t=totals();
@@ -1665,13 +1665,7 @@ function copySummary(){
 `📅 ${dateStr} — ${dayLabel}
 
 🍽 מה אכלתי:
-${foodLines}
-
-📊 סה"כ:
-קלוריות:   ${Math.round(t.cal)} / ${tgt.cal} קל׳
-חלבון:     ${Math.round(t.prot)}ג' (יעד: ${tgt.protMin}–${tgt.protMax}ג')
-פחמימות:   ${Math.round(t.carb)}ג' (יעד: ${tgt.carbMin}–${tgt.carbMax}ג')
-שומנים:    ${Math.round(t.fat)}ג' (יעד: ${tgt.fatMin}–${tgt.fatMax}ג')`;
+${foodLines}`;
 
   navigator.clipboard.writeText(text).then(()=>{
     const btn=document.getElementById('copyBtn');

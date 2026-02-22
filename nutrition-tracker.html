@@ -1695,7 +1695,7 @@ function copySummary(){
       if(x.free) return pad(x.name||'פריט חופשי',20)+pad('-',11)+padL('-',10)+padL('-',8)+padL('-',10)+padL('-',7);
       const food=getFoodForItem(x);
       if(!food) return null;
-      const macros=calcMacros(food,x.amount);
+      const macros=calcMacros(x);
       const name=(x.name||food.name).substring(0,19);
       const unitLabel=food.unit||'גרם';
       const qty=x.amount+' '+unitLabel;

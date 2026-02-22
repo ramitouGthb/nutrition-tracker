@@ -832,14 +832,18 @@ function migrateFoodsDB(){
     if(!exists){ FOODS.push(JSON.parse(JSON.stringify(def))); changed=true; }
   });
 
-  // שלב 2: עדכן ערכים תזונתיים לפריטים שלא נערכו ידנית
-  // חפש לפי id קודם, אם לא נמצא — לפי שם (למקרה שנוסף ידנית עם id שגוי)
+  // שלב 2: עדכן ערכים תזונתיים
   FOODS.forEach(f=>{
-    const def=DEFAULT_FOODS.find(d=>d.id===f.id) ||
-              DEFAULT_FOODS.find(d=>d.name.trim().toLowerCase()===f.name.trim().toLowerCase());
+    // חפש לפי id קודם, אחרת לפי שם
+    const defById=DEFAULT_FOODS.find(d=>d.id===f.id);
+    const defByName=DEFAULT_FOODS.find(d=>d.name.trim().toLowerCase()===f.name.trim().toLowerCase());
+    const def=defById||defByName;
     if(!def) return;
-    // תקן id אם שגוי
-    if(f.id!==def.id){ f.id=def.id; changed=true; }
+
+    // אם נמצא לפי שם אבל id שגוי — תקן id וכפה עדכון ערכים (ללא קשר ל-_userEdited)
+    const idMismatch=!defById && defByName;
+    if(idMismatch){ f.id=def.id; delete f._userEdited; changed=true; }
+
     if(!f._userEdited){
       if(def.per100){
         if(!f.per100 ||

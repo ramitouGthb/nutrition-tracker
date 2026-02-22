@@ -889,6 +889,7 @@ function migrateFoodsDB(){
 async function resetFoodsToDefault(){
   if(!confirm('לאפס את כל טבלת המזונות לברירת מחדל? כל השינויים שלך יימחקו.')) return;
   FOODS=JSON.parse(JSON.stringify(DEFAULT_FOODS));
+  localStorage.removeItem('foodsDB');
   await saveFoodsDB();
   renderDbTable(); renderFoodGrid();
   alert('✓ טבלת המזונות אופסה');

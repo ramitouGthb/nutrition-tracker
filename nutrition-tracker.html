@@ -826,24 +826,39 @@ async function loadFoodsDB(){
 function migrateFoodsDB(){
   let changed=false;
 
-  // הוסף פריטים חדשים מ-DEFAULT שאינם קיימים ב-FOODS
+  // הסר כפילויות לפי שם — שמור רק את הפריט עם ה-id הנמוך (DEFAULT) או עדכן ערכים
+  const seen={};
+  FOODS=FOODS.filter(f=>{
+    const key=f.name.trim().toLowerCase();
+    if(seen[key]){
+      changed=true;
+      return false; // מחק כפיל
+    }
+    seen[key]=true;
+    return true;
+  });
+
+  // הוסף פריטים חדשים מ-DEFAULT שאינם קיימים
   DEFAULT_FOODS.forEach(def=>{
-    const exists=FOODS.find(f=>f.id===def.id);
+    const exists=FOODS.find(f=>f.id===def.id || f.name.trim()===def.name.trim());
     if(!exists){ FOODS.push(JSON.parse(JSON.stringify(def))); changed=true; }
   });
 
   FOODS.forEach(f=>{
-    const def=DEFAULT_FOODS.find(d=>d.id===f.id);
+    const def=DEFAULT_FOODS.find(d=>d.id===f.id || d.name.trim()===f.name.trim());
     if(!def) return;
 
-    // עדכן ערכים תזונתיים אם השתנו בקוד (רק לפריטים שלא נערכו ידנית)
-    // השוואה: אם הפריט הוא "vanilla" (לא ערוך ידנית) — סמן _edited על ידי המשתמש
+    // סנכרן id אם שונה
+    if(f.id!==def.id){ f.id=def.id; changed=true; }
+
+    // עדכן ערכים תזונתיים אם לא נערכו ידנית
     if(!f._userEdited){
       if(def.per100){
         if(!f.per100 ||
           f.per100.cal!==def.per100.cal || f.per100.prot!==def.per100.prot ||
           f.per100.carb!==def.per100.carb || f.per100.fat!==def.per100.fat){
           f.per100=JSON.parse(JSON.stringify(def.per100));
+          delete f.perUnit;
           changed=true;
         }
       }
@@ -852,15 +867,13 @@ function migrateFoodsDB(){
           f.perUnit.cal!==def.perUnit.cal || f.perUnit.prot!==def.perUnit.prot ||
           f.perUnit.carb!==def.perUnit.carb || f.perUnit.fat!==def.perUnit.fat){
           f.perUnit=JSON.parse(JSON.stringify(def.perUnit));
+          delete f.per100;
           changed=true;
         }
       }
     }
 
-    // עדכן מבנה ישן
-    if(def.perUnit && !f.perUnit && f.gramsPerUnit){
-      f.perUnit=def.perUnit; delete f.per100; delete f.gramsPerUnit; changed=true;
-    }
+    // נקה מבנה ישן
     if(f.gramsPerUnit){ delete f.gramsPerUnit; changed=true; }
   });
 

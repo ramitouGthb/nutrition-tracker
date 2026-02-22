@@ -495,10 +495,18 @@ body{font-family:'Heebo',sans-serif;background:var(--bg);color:var(--text);direc
       </div>
     </div>
 
-    <button class="claude-btn" id="claudeBtn" onclick="analyzeWithClaude()" disabled>
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
-      בקש ניתוח מקלוד
-    </button>
+    <div style="display:flex;gap:10px;align-items:stretch;">
+      <button class="claude-btn" id="claudeBtn" onclick="analyzeWithClaude()" disabled style="flex:1;">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+        בקש ניתוח מקלוד
+      </button>
+      <button id="copyBtn" onclick="copySummary()" disabled
+        style="padding:12px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text2);font-family:'Heebo',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap;"
+        onmouseover="if(!this.disabled)this.style.borderColor='var(--accent)'"
+        onmouseout="this.style.borderColor='var(--border)'">
+        📋 העתק סיכום
+      </button>
+    </div>
     <div id="analysisBox" style="display:none"></div>
   </div>
 
@@ -716,6 +724,9 @@ const DEFAULT_FOODS = [
   {id:12, name:"טונה במים (116 קל' / 100 גרם)",           per100:{cal:116, prot:26.0,carb:0.0,  fat:0.8},  defaultAmount:100, unit:'גרם'},
   {id:13, name:"דבש (320 קל' / 100 גרם)",                 per100:{cal:320, prot:0.0, carb:80.0, fat:0.0},  defaultAmount:10,  unit:'גרם'},
   {id:14, name:'6 מלפפונים קטנים + 2 שומר קטנים',        perUnit:{cal:65,  prot:2.8, carb:9.2,  fat:0.8},  defaultAmount:1,   unit:'מנה'},
+  {id:15, name:"ויטמין D3 (2,000 IU / 50 מק\"ג)",         perUnit:{cal:0,   prot:0,   carb:0,    fat:0},    defaultAmount:1,   unit:'כמוסה'},
+  {id:16, name:"אומגה 3 שמן דגים (1,000 מ\"ג)",           perUnit:{cal:9,   prot:0,   carb:0,    fat:1.0},  defaultAmount:1,   unit:'כמוסה'},
+  {id:17, name:'מגנזיום (100 מ"ג)',                        perUnit:{cal:0,   prot:0,   carb:0,    fat:0},    defaultAmount:1,   unit:'כמוסה'},
 ];
 
 // ════════════════════════════════
@@ -893,7 +904,7 @@ async function loadDraft(){
       refreshItemMacros();
       if(r.weight){ document.getElementById('weightInput').value=r.weight; _saveWeightLocal(today,r.weight); }
       setDayType(dayType); renderFoodList(); updateMacrosBar();
-      document.getElementById('claudeBtn').disabled=currentItems.filter(x=>x.type==='food').length===0;
+      updateActionButtons();
       setSyncStatus('ok');
       return;
     }
@@ -904,7 +915,7 @@ async function loadDraft(){
     if(d && d.date===today){ dayType=d.dayType||'rest'; currentItems=d.items||[];
       refreshItemMacros();
       setDayType(dayType); renderFoodList(); updateMacrosBar();
-      document.getElementById('claudeBtn').disabled=currentItems.filter(x=>x.type==='food').length===0;
+      updateActionButtons();
       loadWeightForDate(); return; }
   }catch(e){}
   // new day — empty
@@ -1011,14 +1022,14 @@ async function onDateChange(){
       refreshItemMacros();
       if(r.weight){ document.getElementById('weightInput').value=r.weight; _saveWeightLocal(newDate,r.weight); }
       setDayType(dayType); renderFoodList(); updateMacrosBar();
-      document.getElementById('claudeBtn').disabled=currentItems.filter(x=>x.type==='food').length===0;
+      updateActionButtons();
       setSyncStatus('ok');
     } else {
       // no data for this date — show empty
       currentItems=[]; dayType='rest';
       document.getElementById('weightInput').value='';
       setDayType(dayType); renderFoodList(); updateMacrosBar();
-      document.getElementById('claudeBtn').disabled=true;
+      updateActionButtons();
     }
   }catch(e){
     // offline — try localStorage history
@@ -1470,7 +1481,7 @@ function confirmFreeItem(){
   }
   closeFreeItemPopup();
   renderFoodList(); updateMacrosBar(); saveDraft();
-  document.getElementById('claudeBtn').disabled=currentItems.filter(x=>x.type==='food').length===0;
+  updateActionButtons();
 }
 
 async function estimateWithClaude(){
@@ -1601,6 +1612,56 @@ function filterFoods(){
   renderFoodGrid();
 }
 
+function copySummary(){
+  const date=document.getElementById('dayDate').value;
+  const d=new Date(date+'T00:00:00');
+  const dateStr=d.toLocaleDateString('he-IL',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  const dayLabel=dayType==='rest'?'יום מנוחה (יעד: 1,650 קל׳)':'יום אימון (יעד: 1,975 קל׳)';
+  const tgt=TARGETS[dayType];
+
+  const foodLines=currentItems
+    .filter(x=>!x.section)
+    .map(x=>{
+      if(x.free){
+        return `• ${x.name||'פריט חופשי'}: ${x.cal||0} קל׳, ${x.prot||0}ג' חלבון, ${x.carb||0}ג' פחמימות, ${x.fat||0}ג' שומן`;
+      }
+      const food=getFoodForItem(x);
+      const m=calcMacros(x);
+      const unitLabel=food?food.unit||'גרם':'גרם';
+      return `• ${x.name}: ${x.amount} ${unitLabel} → ${m.cal} קל׳, ${m.prot}ג' חלבון, ${m.carb}ג' פחמימות, ${m.fat}ג' שומן`;
+    }).join('\n');
+
+  const t=totals();
+  const text=
+`📅 ${dateStr} — ${dayLabel}
+
+🍽 מה אכלתי:
+${foodLines}
+
+📊 סה"כ:
+קלוריות:   ${Math.round(t.cal)} / ${tgt.cal} קל׳
+חלבון:     ${Math.round(t.prot)}ג' (יעד: ${tgt.protMin}–${tgt.protMax}ג')
+פחמימות:   ${Math.round(t.carb)}ג' (יעד: ${tgt.carbMin}–${tgt.carbMax}ג')
+שומנים:    ${Math.round(t.fat)}ג' (יעד: ${tgt.fatMin}–${tgt.fatMax}ג')`;
+
+  navigator.clipboard.writeText(text).then(()=>{
+    const btn=document.getElementById('copyBtn');
+    const orig=btn.textContent;
+    btn.textContent='✅ הועתק!';
+    btn.style.borderColor='var(--green)';
+    btn.style.color='var(--green)';
+    setTimeout(()=>{ btn.textContent=orig; btn.style.borderColor='var(--border)'; btn.style.color='var(--text2)'; },2000);
+  }).catch(()=>alert('לא ניתן להעתיק — נסה מדפדפן אחר'));
+}
+
+function updateActionButtons(){
+  const hasItems=currentItems.filter(x=>!x.section).length>0;
+  const claudeBtn=document.getElementById('claudeBtn');
+  const copyBtn=document.getElementById('copyBtn');
+  if(claudeBtn) claudeBtn.disabled=!hasItems;
+  if(copyBtn) copyBtn.disabled=!hasItems;
+}
+
 function toggleFoodSelector(){
   const sel=document.getElementById('foodSelector');
   const isOpen = sel.style.display!=='none';
@@ -1623,7 +1684,7 @@ function renderFoodList(){
     list.innerHTML='<div class="empty-state">טרם הוספת מזונות להיום</div>';
     const tr=document.getElementById('totalsRow');
     if(tr) tr.style.display='none';
-    document.getElementById('claudeBtn').disabled=true;
+    updateActionButtons();
     return;
   }
   document.getElementById('claudeBtn').disabled=false;
@@ -1674,6 +1735,7 @@ function renderFoodList(){
     list.appendChild(div);
   });
   updateTotalsRow();
+  updateActionButtons();
 }
 
 function calcMacros(item){

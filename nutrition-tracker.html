@@ -710,11 +710,11 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 // DEFAULT FOOD DATABASE
 // ════════════════════════════════
 const DEFAULT_FOODS = [
-  {id:1,  name:'שיבולת שועל',                             per100:{cal:37,  prot:1.4, carb:6.6,  fat:0.7},  defaultAmount:100, unit:'גרם'},
+  {id:1,  name:'שיבולת שועל',                             per100:{cal:389, prot:17.0,carb:66.0, fat:7.0},  defaultAmount:100, unit:'גרם'},
   {id:2,  name:"צ'יה",                                    per100:{cal:486, prot:17.0,carb:42.0, fat:31.0}, defaultAmount:10,  unit:'גרם'},
   {id:3,  name:'פשתן טחון',                               per100:{cal:534, prot:18.0,carb:29.0, fat:42.0}, defaultAmount:10,  unit:'גרם'},
   {id:4,  name:'אגוזי ברזיל',                             per100:{cal:659, prot:14.3,carb:12.0, fat:67.0}, defaultAmount:24,  unit:'גרם'},
-  {id:5,  name:'תפוחי אדמה במיקרו',                      per100:{cal:77,  prot:2.0, carb:17.0, fat:0.1},  defaultAmount:200, unit:'גרם'},
+  {id:5,  name:'תפוחי אדמה במיקרו',                      per100:{cal:93,  prot:2.5, carb:21.0, fat:0.1},  defaultAmount:200, unit:'גרם'},
   {id:6,  name:'חזה עוף על הפלנצ׳ה',                    per100:{cal:165, prot:31.0,carb:0.0,  fat:3.6},  defaultAmount:150, unit:'גרם'},
   {id:7,  name:"מעדן חלבון (63 קל' / 10 ג' חלבון)",      per100:{cal:63,  prot:10.0,carb:3.2,  fat:1.0},  defaultAmount:200, unit:'גרם'},
   {id:8,  name:'קולורבי גדול',                            perUnit:{cal:43,  prot:2.7, carb:10.0, fat:0.2},  defaultAmount:2,   unit:'יחידה'},
@@ -824,16 +824,45 @@ async function loadFoodsDB(){
 // מעדכן פריטים ישנים שחסר להם מבנה תקין — מ-DEFAULT_FOODS
 function migrateFoodsDB(){
   let changed=false;
+
+  // הוסף פריטים חדשים מ-DEFAULT שאינם קיימים ב-FOODS
+  DEFAULT_FOODS.forEach(def=>{
+    const exists=FOODS.find(f=>f.id===def.id);
+    if(!exists){ FOODS.push(JSON.parse(JSON.stringify(def))); changed=true; }
+  });
+
   FOODS.forEach(f=>{
-    const def=DEFAULT_FOODS.find(d=>d.id===f.id||d.name===f.name);
+    const def=DEFAULT_FOODS.find(d=>d.id===f.id);
     if(!def) return;
-    // אם ב-DEFAULT יש perUnit אבל הפריט הנוכחי לא עודכן
+
+    // עדכן ערכים תזונתיים אם השתנו בקוד (רק לפריטים שלא נערכו ידנית)
+    // השוואה: אם הפריט הוא "vanilla" (לא ערוך ידנית) — סמן _edited על ידי המשתמש
+    if(!f._userEdited){
+      if(def.per100){
+        if(!f.per100 ||
+          f.per100.cal!==def.per100.cal || f.per100.prot!==def.per100.prot ||
+          f.per100.carb!==def.per100.carb || f.per100.fat!==def.per100.fat){
+          f.per100=JSON.parse(JSON.stringify(def.per100));
+          changed=true;
+        }
+      }
+      if(def.perUnit){
+        if(!f.perUnit ||
+          f.perUnit.cal!==def.perUnit.cal || f.perUnit.prot!==def.perUnit.prot ||
+          f.perUnit.carb!==def.perUnit.carb || f.perUnit.fat!==def.perUnit.fat){
+          f.perUnit=JSON.parse(JSON.stringify(def.perUnit));
+          changed=true;
+        }
+      }
+    }
+
+    // עדכן מבנה ישן
     if(def.perUnit && !f.perUnit && f.gramsPerUnit){
       f.perUnit=def.perUnit; delete f.per100; delete f.gramsPerUnit; changed=true;
     }
-    // הסר gramsPerUnit ישן שכבר לא צריך
     if(f.gramsPerUnit){ delete f.gramsPerUnit; changed=true; }
   });
+
   if(changed) saveFoodsDB();
 }
 async function resetFoodsToDefault(){
@@ -1969,12 +1998,12 @@ function updateFoodUnit(id, newUnit){
 }
 function updateFoodField(id,field,val){
   const food=getFoodById(id); if(!food) return;
-  food[field]=val; saveFoodsDB();
+  food[field]=val; food._userEdited=true; saveFoodsDB();
 }
 function updateFoodMacro(id,macro,val){
   const food=getFoodById(id); if(!food) return;
   const macros=food.perUnit||food.per100;
-  macros[macro]=val; saveFoodsDB();
+  macros[macro]=val; food._userEdited=true; saveFoodsDB();
 }
 function toggleEditName(id){
   document.getElementById('name-display-'+id).style.display='none';
